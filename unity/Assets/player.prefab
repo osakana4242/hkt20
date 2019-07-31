@@ -79,8 +79,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   rigidBody: {fileID: 713840809}
   speed: 10
+  dashSpeed: 20
   rotSpeed: 180
   inputVec: {x: 0, y: 0}
+  hogeTime: 0
+  dashLv: 0
 --- !u!65 &7879033535195188124
 BoxCollider:
   m_ObjectHideFlags: 0

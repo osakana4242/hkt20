@@ -7,9 +7,11 @@ namespace Osakana4242 {
 
 		public Rigidbody rigidBody;
 		public float speed = 5f;
+		public float dashSpeed = 20f;
 		public float rotSpeed = 180f;
 		public Vector2 inputVec;
-
+		public float hogeTime;
+		public int dashLv;
 		// Start is called before the first frame update
 		void Start() {
 
@@ -17,6 +19,20 @@ namespace Osakana4242 {
 
 		// Update is called once per frame
 		void Update() {
+			if (Input.GetKeyDown(KeyCode.UpArrow)) {
+				if (0f < hogeTime) {
+					dashLv = 2;
+				} else {
+					dashLv = 1;
+				}
+				hogeTime = 0.3f;
+			}
+			if (Input.GetKeyDown(KeyCode.DownArrow)) {
+				hogeTime = 0f;
+				dashLv = 0;
+			}
+
+
 			inputVec.x = Input.GetKey(KeyCode.LeftArrow) ?
 					-1f :
 					Input.GetKey(KeyCode.RightArrow) ?
@@ -30,6 +46,9 @@ namespace Osakana4242 {
 		}
 
 		void FixedUpdate() {
+			if (0f < hogeTime) {
+				hogeTime -= Time.deltaTime;
+			}
 			var x = inputVec.x;
 			var y = inputVec.y;
 			var dt = Time.fixedDeltaTime;
@@ -38,7 +57,7 @@ namespace Osakana4242 {
 			rigidBody.rotation = rot;
 
 			var pos = rigidBody.position;
-			var speed2 = y * speed; // * Time.deltaTime;
+			var speed2 = y * ((2 <= dashLv) ? dashSpeed : speed); // * Time.deltaTime;
 			var nextPos = pos + rot * new Vector3(0f, 0f, speed2);
 			var deltaPos = nextPos - pos;
 			var velocity = rigidBody.velocity;

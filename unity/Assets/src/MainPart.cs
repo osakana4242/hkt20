@@ -72,7 +72,7 @@ namespace Osakana4242 {
 
 		public sealed class Goal {
 			public float time;
-			public float rotateDuration = 2f;
+			public float rotateDuration = 4f;
 			public int score = 0;
 		}
 
@@ -245,7 +245,7 @@ namespace Osakana4242 {
 						{
 							var prefab = self.resource.Get<GameObject>("player");
 							var goal = self.GetGoal();
-							var go = GameObject.Instantiate(prefab, goal.transform.position + new Vector3(0f, 3f, 0f), Quaternion.identity, self.transform);
+							var go = GameObject.Instantiate(prefab, goal.transform.position + new Vector3(0f, 10f, 0f), Quaternion.identity, self.transform);
 							var obj = go.AddComponent<MyObject>();
 							obj.id = self.CreateObjectId();
 							obj.category = "player";
@@ -257,10 +257,15 @@ namespace Osakana4242 {
 						}
 
 						{
-							var prefab = self.resource.Get<GameObject>("stone");
+							var prefabs = new GameObject[] {
+								self.resource.Get<GameObject>("stone_01"),
+								self.resource.Get<GameObject>("stone_01"),
+								self.resource.Get<GameObject>("stone_02"),
+								self.resource.Get<GameObject>("stone_02"),
+							};
 
 							var basePos = self.stoneCenterPosition;
-							var count = 4096;
+							var count = 2048;
 							Random.InitState(1);
 							var list = new List<Lib.MaterialPropertyBlockComponent>();
 							var colors = new Color32[] {
@@ -286,6 +291,7 @@ namespace Osakana4242 {
 									Random.Range(1f, 3f),
 									Random.Range(1f, 3f)
 								);
+								var prefab = prefabs[i & (prefabs.Length - 1)];
 								var go = GameObject.Instantiate(prefab, pos, Quaternion.identity, self.transform);
 								var tr = go.transform;
 								tr.localScale = Vector3.Scale(tr.localScale, scale);
