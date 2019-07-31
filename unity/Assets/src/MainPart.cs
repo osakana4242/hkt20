@@ -16,25 +16,72 @@ namespace Osakana4242 {
 		// 
 		// 終了
 
+		public TMPro.TextMeshProUGUI progressTextUI;
+		public TMPro.TextMeshProUGUI centerTextUI;
+
 		StateMachine<MainPart> sm_;
 		List<MyObject> objectList_;
 		public ResourceBank resource;
 		public GameObject cameraGo;
 		public int playerId;
+		public int goalId;
 		public WaveData waveData;
 		public float startWaveZ_ = 3f;
 		public int blockI_;
 		public int waveI_;
+		public Vector3 goalPosition = new Vector3(-15, 0f, -15f);
+		public Vector3 stoneCenterPosition = new Vector3(15, 0f, 15f);
 
 		public sealed class MyObject : MonoBehaviour {
+			public bool hasDestroy;
 			public int id;
 			public string category;
 			public Player player;
 			public Enemy enemy;
+			public Goal goal;
+			public Stone stone;
+
+			public void Destroy() {
+				hasDestroy = true;
+			}
+		}
+
+		public struct CollisionInfo {
+			public Collider collider;
+			public Collision collision;
+		}
+
+		public class CollilsionObserver : MonoBehaviour {
+			public System.Action<CollisionInfo> onEvent;
+			public void OnDestroy() {
+				onEvent = null;
+			}
+			public void OnTriggerEnter(Collider collider) {
+				if (onEvent == null) return;
+				onEvent(new CollisionInfo() {
+					collider = collider,
+				});
+			}
+			public void OnCollisionEnter(Collision collision) {
+				if (onEvent == null) return;
+				onEvent(new CollisionInfo() {
+					collision = collision,
+				});
+			}
+		}
+
+		public sealed class Goal {
+			public float time;
+			public float rotateDuration = 2f;
+			public int score = 0;
 		}
 
 		public sealed class Player {
+			public int score;
+		}
 
+		public sealed class Stone {
+			public int score = 1;
 		}
 
 		public sealed class Enemy {
@@ -62,40 +109,66 @@ namespace Osakana4242 {
 			objectList_ = null;
 		}
 		void FixedUpdate() {
-
-			{
-				var player = GetPlayer();
-				if (player != null) {
-					var rb = player.GetComponent<Rigidbody>();
-					var v = rb.velocity;
-					// if (0f < v.y) {
-					// 	v.y = 0f;
-					// 	rb.velocity = v;
-					// }
-					// var pos = rb.position;
-					// if (0f < pos.y) {
-					// 	pos.y = 0f;
-					// 	rb.position = pos;
-					// }
-
+			for (var i = objectList_.Count - 1; 0 <= i; i--) {
+				var obj = objectList_[i];
+				{
+					var player = obj.player;
+					if (player != null) {
+						UpdatePlayer(obj, player);
+					}
 				}
+				{
+					var goal = obj.goal;
+					if (goal != null) {
+						UpdateGoal(obj, goal);
+					}
+				}
+				{
+					var stone = obj.stone;
+					if (stone != null) {
+						UpdateStone(obj, stone);
+					}
+				}
+
 			}
 
-			foreach (var item in objectList_) {
-				var enemy = item.enemy;
-				if (enemy == null) continue;
-				var rb = item.GetComponent<Rigidbody>();
-				var speed = 1f;
-				var trot = enemy.targetRot;
-				rb.rotation = Quaternion.RotateTowards(rb.rotation, trot, 180f * Time.deltaTime);
-				var forward = rb.rotation * Vector3.forward;
-				forward.y = 0f;
-				forward.Normalize();
-				var deltaAngle = Quaternion.Angle(rb.rotation, trot);
 
-				if (forward != Vector3.zero && deltaAngle < 5f) {
-					rb.position += forward * speed * Time.deltaTime;
-				}
+			for (var i = objectList_.Count - 1; 0 <= i; i--) {
+				var obj = objectList_[i];
+				if (!obj.hasDestroy) continue;
+				objectList_.RemoveAt(i);
+				GameObject.Destroy(obj.gameObject);
+			}
+
+			if (data.isPlaying) {
+				data.time += Time.deltaTime;
+			}
+		}
+
+		void UpdatePlayer(MyObject obj, Player player) {
+			var rb = obj.GetComponent<Rigidbody>();
+			var v = rb.velocity;
+			// if (0f < v.y) {
+			// 	v.y = 0f;
+			// 	rb.velocity = v;
+			// }
+			// var pos = rb.position;
+			// if (0f < pos.y) {
+			// 	pos.y = 0f;
+			// 	rb.position = pos;
+			// }
+			player.score = GetGoal().goal.score;
+		}
+
+		void UpdateGoal(MyObject obj, Goal goal) {
+			var y = 360f * goal.time / goal.rotateDuration;
+			obj.transform.localRotation = Quaternion.Euler(0f, y, 0f);
+			goal.time += Time.deltaTime;
+		}
+
+		void UpdateStone(MyObject obj, Stone stone) {
+			if (obj.transform.position.y <= -5f) {
+				obj.Destroy();
 			}
 		}
 
@@ -113,6 +186,9 @@ namespace Osakana4242 {
 		public MyObject GetPlayer() {
 			return FindObjectById(playerId);
 		}
+		public MyObject GetGoal() {
+			return FindObjectById(goalId);
+		}
 		int autoincrement;
 		public int CreateObjectId() {
 			return ++autoincrement;
@@ -120,8 +196,10 @@ namespace Osakana4242 {
 
 
 		static StateMachine<MainPart>.StateFunc stateExit_g_ = (_evt) => {
+			var self = _evt.owner;
 			switch (_evt.type) {
 				case StateMachineEventType.Enter: {
+						self.data.isPlaying = false;
 						UnityEngine.SceneManagement.SceneManager.LoadScene("main");
 						return null;
 					}
@@ -132,17 +210,42 @@ namespace Osakana4242 {
 
 		static StateMachine<MainPart>.StateFunc stateInit_g_ = (_evt) => {
 			switch (_evt.type) {
-				case StateMachineEventType.Update: {
+				case StateMachineEventType.Enter: {
 						var self = _evt.owner;
+						self.progressTextUI.text = "";
+						self.centerTextUI.text = "READY";
 
 						{
 							var waveJson = self.resource.Get<TextAsset>("wave");
 							self.waveData = JsonUtility.FromJson<WaveData>(waveJson.text);
 						}
 
+
 						{
-							var playerPrefab = self.resource.Get<GameObject>("player");
-							var go = GameObject.Instantiate(playerPrefab, Vector3.zero, Quaternion.identity, self.transform);
+							var prefab = self.resource.Get<GameObject>("goal");
+							var go = GameObject.Instantiate(prefab, self.goalPosition, Quaternion.identity, self.transform);
+							var obj = go.AddComponent<MyObject>();
+							var colObserver = go.AddComponent<CollilsionObserver>();
+							colObserver.onEvent = (_info) => {
+								if (!self.data.isPlaying) return;
+								var otherObj = _info.collider.GetComponentInParent<MyObject>();
+								if (otherObj == null) return;
+								if (otherObj.stone == null) return;
+								obj.goal.score += otherObj.stone.score;
+								otherObj.Destroy();
+							};
+							obj.id = self.CreateObjectId();
+							obj.category = "goal";
+							obj.goal = new Goal();
+							self.objectList_.Add(obj);
+							self.goalId = obj.id;
+						}
+
+
+						{
+							var prefab = self.resource.Get<GameObject>("player");
+							var goal = self.GetGoal();
+							var go = GameObject.Instantiate(prefab, goal.transform.position + new Vector3(0f, 3f, 0f), Quaternion.identity, self.transform);
 							var obj = go.AddComponent<MyObject>();
 							obj.id = self.CreateObjectId();
 							obj.category = "player";
@@ -156,7 +259,7 @@ namespace Osakana4242 {
 						{
 							var prefab = self.resource.Get<GameObject>("stone");
 
-							var basePos = new Vector3(0f, 0f, 3f);
+							var basePos = self.stoneCenterPosition;
 							var count = 4096;
 							Random.InitState(1);
 							var list = new List<Lib.MaterialPropertyBlockComponent>();
@@ -187,59 +290,48 @@ namespace Osakana4242 {
 								var tr = go.transform;
 								tr.localScale = Vector3.Scale(tr.localScale, scale);
 								go.GetComponents<Lib.MaterialPropertyBlockComponent>(list);
-								var color = colors[Random.Range(0,colors.Length)];
+								var color = colors[Random.Range(0, colors.Length)];
 								foreach (var comp in list) {
 									comp.color = color;
 								}
+								var obj = go.AddComponent<MyObject>();
+								obj.id = self.CreateObjectId();
+								obj.stone = new Stone();
+								self.objectList_.Add(obj);
 							}
 
 						}
-
-						return stateMain_g_;
+						return null;
 					}
+				case StateMachineEventType.Update: {
+						if (1f <= _evt.sm.time) {
+							return stateMain_g_;
+						}
+						return null;
+					}
+
 				default:
 				return null;
 			}
 		};
 
-		void StepWave() {
-			var self = this;
-
-			var cellSize = 1f;
-			var targetZ = self.GetPlayer().transform.position.z + 20f;
-
-			var enemyPrefab = self.resource.Get<GameObject>("enemy");
-			var waveData = self.waveData;
-			var lastZ = 0f;
-			var items = waveData.blocks[blockI_].items;
-			var enemyCount = items.Length / 2;
-			for (var i = self.waveI_; i < enemyCount; i++) {
-				self.waveI_ = i;
-				var j = i * 2;
-				var offset = i * 3;
-				var pos = new Vector3(items[j + 0], 0f, items[j + 1]) * cellSize;
-				pos.z += self.startWaveZ_;
-				lastZ = pos.z;
-				if (targetZ < pos.z) return;
-
-				var go = GameObject.Instantiate(enemyPrefab, pos, Quaternion.LookRotation(Vector3.back), self.transform);
-				var obj = go.AddComponent<MyObject>();
-				obj.id = self.CreateObjectId();
-				obj.category = "enemy";
-				obj.enemy = new Enemy();
-				obj.enemy.targetRot = Quaternion.LookRotation(Vector3.back) * Quaternion.Euler(0f, Random.Range(-10f, 10f), 0f);
-				self.objectList_.Add(obj);
-			}
-			self.waveI_ = 0;
-			self.blockI_ = (self.blockI_ + 1) % waveData.blocks.Length;
-			startWaveZ_ = lastZ + 1f * cellSize;
-		}
-
 		static StateMachine<MainPart>.StateFunc stateMain_g_ = (_evt) => {
 			var self = _evt.owner;
 			// self.StepWave();
+			self.data.isPlaying = true;
 
 			var player = self.GetPlayer();
+
+			{
+				var sb = new System.Text.StringBuilder();
+				sb.AppendFormat("SCORE: {0:F0}\n", player.player.score);
+				sb.AppendFormat("TIME: {0:F2}\n", self.data.RestTime);
+				self.progressTextUI.text = sb.ToString();
+			}
+			{
+				self.centerTextUI.text = "";
+			}
+
 			var playerPos = player.transform.position;
 			self.data.distance = Mathf.Max(self.data.distance, playerPos.z);
 
@@ -251,6 +343,11 @@ namespace Osakana4242 {
 				if (z < pos.z) continue;
 				self.objectList_.RemoveAt(i);
 				GameObject.Destroy(obj.gameObject);
+			}
+
+			var hasTimeOver = self.data.RestTime <= 0f;
+			if (hasTimeOver) {
+				return stateTimeOver_g_;
 			}
 
 			var isFall = playerPos.y < -5;
@@ -265,16 +362,52 @@ namespace Osakana4242 {
 			return null;
 		};
 
+		/** タイムオーバー */
+		static StateMachine<MainPart>.StateFunc stateTimeOver_g_ = (_evt) => {
+			var self = _evt.owner;
+			switch (_evt.type) {
+				case StateMachineEventType.Enter:
+				self.centerTextUI.text = "TIME OVER";
+				self.data.isPlaying = false;
+				break;
+			}
+
+			if (3f <= _evt.sm.time) {
+				return stateResult_g_;
+			}
+
+			return null;
+		};
+
 		/** 落下 */
 		static StateMachine<MainPart>.StateFunc stateFall_g_ = (_evt) => {
 			var self = _evt.owner;
 			switch (_evt.type) {
 				case StateMachineEventType.Enter:
+				self.centerTextUI.text = "FALL";
+				self.data.isPlaying = false;
 				self.cameraGo.GetComponent<CameraController>().target = null;
 				break;
 			}
 
 			if (3f <= _evt.sm.time) {
+				return stateResult_g_;
+			}
+
+			return null;
+		};
+
+		static StateMachine<MainPart>.StateFunc stateResult_g_ = (_evt) => {
+			var self = _evt.owner;
+			switch (_evt.type) {
+				case StateMachineEventType.Enter:
+				self.centerTextUI.text = "PRESS Z KEY";
+				self.data.isPlaying = false;
+				self.cameraGo.GetComponent<CameraController>().target = null;
+				break;
+			}
+
+			if (Input.GetKeyDown(KeyCode.Z)) {
 				return stateExit_g_;
 			}
 
@@ -283,14 +416,16 @@ namespace Osakana4242 {
 
 		[System.Serializable]
 		public class Data {
+			public bool isPlaying;
 			/** 経過時間 */
 			public float time;
 			/** 制限時間 */
-			public float duration;
+			public float duration = 90f;
 			/** 走行距離 */
 			public float distance;
 			public float speed;
 			public float speedMax;
+			public float RestTime => Mathf.Max(0f, duration - time);
 		}
 
 	}
