@@ -30,7 +30,12 @@ namespace Osakana4242 {
 		public int blockI_;
 		public int waveI_;
 		public Vector3 goalPosition = new Vector3(-15, 0f, -15f);
-		public Vector3 stoneCenterPosition = new Vector3(15, 0f, 15f);
+		public Vector3[] stonePositions = {
+			new Vector3(-15f, 0f, 15f),
+			new Vector3(15f, 0f, 15f),
+			new Vector3(-15f, 0f, 0f),
+			new Vector3(15f, 0f, 0f),
+		};
 
 		public sealed class MyObject : MonoBehaviour {
 			public bool hasDestroy;
@@ -208,6 +213,55 @@ namespace Osakana4242 {
 			}
 		};
 
+		void addStone(Vector3 basePos, int count) {
+			var self = this;
+			var prefabs = new GameObject[] {
+					self.resource.Get<GameObject>("stone_01"),
+					self.resource.Get<GameObject>("stone_01"),
+					self.resource.Get<GameObject>("stone_02"),
+					self.resource.Get<GameObject>("stone_02"),
+				};
+
+			var list = new List<Lib.MaterialPropertyBlockComponent>();
+			var colors = new Color32[] {
+								new Color32(0xff, 0xff, 0x00, 0xff),
+								new Color32(0xff, 0x00, 0x00, 0xff),
+								new Color32(0x00, 0xff, 0x00, 0xff),
+								new Color32(0x00, 0x00, 0xff, 0xff),
+							};
+			for (var i = 0; i < count; i++) {
+				var pos = basePos + new Vector3(
+					Random.Range(-3f, 3f),
+					i * 1f,
+					Random.Range(-3f, 3f)
+				);
+				var rot = Quaternion.Euler(
+					Random.Range(0f, 360f),
+					Random.Range(0f, 360f),
+					Random.Range(0f, 360f)
+				);
+
+				var scale = new Vector3(
+					Random.Range(1f, 3f),
+					Random.Range(1f, 3f),
+					Random.Range(1f, 3f)
+				);
+				var prefab = prefabs[i & (prefabs.Length - 1)];
+				var go = GameObject.Instantiate(prefab, pos, Quaternion.identity, self.transform);
+				var tr = go.transform;
+				tr.localScale = Vector3.Scale(tr.localScale, scale);
+				go.GetComponents<Lib.MaterialPropertyBlockComponent>(list);
+				var color = colors[Random.Range(0, colors.Length)];
+				foreach (var comp in list) {
+					comp.color = color;
+				}
+				var obj = go.AddComponent<MyObject>();
+				obj.id = self.CreateObjectId();
+				obj.stone = new Stone();
+				self.objectList_.Add(obj);
+			}
+		}
+
 		static StateMachine<MainPart>.StateFunc stateInit_g_ = (_evt) => {
 			switch (_evt.type) {
 				case StateMachineEventType.Enter: {
@@ -257,55 +311,11 @@ namespace Osakana4242 {
 						}
 
 						{
-							var prefabs = new GameObject[] {
-								self.resource.Get<GameObject>("stone_01"),
-								self.resource.Get<GameObject>("stone_01"),
-								self.resource.Get<GameObject>("stone_02"),
-								self.resource.Get<GameObject>("stone_02"),
-							};
-
-							var basePos = self.stoneCenterPosition;
-							var count = 2048;
 							Random.InitState(1);
-							var list = new List<Lib.MaterialPropertyBlockComponent>();
-							var colors = new Color32[] {
-								new Color32(0xff, 0xff, 0x00, 0xff),
-								new Color32(0xff, 0x00, 0x00, 0xff),
-								new Color32(0x00, 0xff, 0x00, 0xff),
-								new Color32(0x00, 0x00, 0xff, 0xff),
-							};
-							for (var i = 0; i < count; i++) {
-								var pos = basePos + new Vector3(
-									Random.Range(-1f, 1f),
-									i * 1f,
-									Random.Range(-1f, 1f)
-								);
-								var rot = Quaternion.Euler(
-									Random.Range(0f, 360f),
-									Random.Range(0f, 360f),
-									Random.Range(0f, 360f)
-								);
-
-								var scale = new Vector3(
-									Random.Range(1f, 3f),
-									Random.Range(1f, 3f),
-									Random.Range(1f, 3f)
-								);
-								var prefab = prefabs[i & (prefabs.Length - 1)];
-								var go = GameObject.Instantiate(prefab, pos, Quaternion.identity, self.transform);
-								var tr = go.transform;
-								tr.localScale = Vector3.Scale(tr.localScale, scale);
-								go.GetComponents<Lib.MaterialPropertyBlockComponent>(list);
-								var color = colors[Random.Range(0, colors.Length)];
-								foreach (var comp in list) {
-									comp.color = color;
-								}
-								var obj = go.AddComponent<MyObject>();
-								obj.id = self.CreateObjectId();
-								obj.stone = new Stone();
-								self.objectList_.Add(obj);
-							}
-
+							self.addStone(self.stonePositions[0], 1024);
+							self.addStone(self.stonePositions[1], 1024);
+							self.addStone(self.stonePositions[2], 512);
+							self.addStone(self.stonePositions[3], 512);
 						}
 						return null;
 					}
